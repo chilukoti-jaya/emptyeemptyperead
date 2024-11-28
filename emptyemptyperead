@@ -1,0 +1,90 @@
+import pandas as pd
+
+def filter_employee_logins_dual(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Creates two filtered DataFrames:
+    1. complete_records: Records with all required fields meeting conditions
+    2. partial_records: Records meeting only dev_login character condition
+    
+    Returns:
+        Tuple of (complete_records_df, partial_records_df)
+    """
+    # Create a copy of input DataFrame
+    work_df = df.copy()
+    
+    # Function to check if first two chars are letters
+    def valid_dev_login(login):
+        if pd.isna(login) or len(str(login)) < 2:
+            return False
+        return str(login)[:2].isalpha()
+    
+    # Add validation column for dev_login
+    work_df['valid_login'] = work_df['dev_login'].apply(valid_dev_login)
+    
+    # Complete records filter (all conditions)
+    complete_records = (
+        work_df[
+            (work_df['valid_login']) &  # Valid dev_login
+            work_df['emp_type'].notna() &  # Has emp_type
+            work_df['status'].isin(['A', 'L']) &  # Valid status
+            work_df['flag'].isin(['Y', 'N'])  # Has flag
+        ]
+        .drop_duplicates(subset=['emp_id', 'emp_type', 'dev_login'])
+        .sort_values(['emp_id', 'emp_type'])
+        [['emp_id', 'emp_type', 'dev_login', 'status', 'flag']]
+        .copy()
+    )
+    
+    # Partial records filter (only dev_login condition)
+    partial_records = (
+        work_df[
+            (work_df['valid_login']) &  # Only valid dev_login check
+            (
+                work_df['emp_type'].isna() |  # Missing emp_type OR
+                ~work_df['status'].isin(['A', 'L']) |  # Invalid/missing status OR
+                ~work_df['flag'].isin(['Y', 'N'])  # Missing/invalid flag
+            )
+        ]
+        .drop_duplicates(subset=['emp_id', 'dev_login'])
+        .sort_values('emp_id')
+        # Include all columns to show what's missing
+        [['emp_id', 'emp_type', 'dev_login', 'status', 'flag']]
+        .copy()
+    )
+    
+    return complete_records, partial_records
+
+# Test with sample data
+def test_with_dataframe():
+    # Sample test data with various cases including missing data
+    test_data = {
+        'emp_id':    ['E001', 'E001', 'E002', 'E002', 'E003', 'E003', 'E004', 'E005', 'E006'],
+        'emp_type':  ['DEV',  'DEV',  'QA',   'QA',   'DEV',  None,   None,   'QA',   'DEV'],
+        'dev_login': ['ab123', 'ab123', 'cd_test', '12_test', 'xy_dev', 'mn890', 'pq123', 'rs_', '99test'],
+        'status':    ['A', 'L', None, 'T', 'A', None, 'A', 'L', None],
+        'flag':      ['Y', 'N', 'Y', None, None, 'Y', None, 'N', 'Y']
+    }
+    
+    input_df = pd.DataFrame(test_data)
+    
+    print("\nInput DataFrame:")
+    print(input_df)
+    print("\n" + "="*80 + "\n")
+    
+    complete_df, partial_df = filter_employee_logins_dual(input_df)
+    
+    print("Complete Records (All conditions met):")
+    print(complete_df)
+    print("\n" + "="*80 + "\n")
+    
+    print("Partial Records (Only dev_login character condition met):")
+    print(partial_df)
+    print("\n" + "="*80 + "\n")
+    
+    print("Summary:")
+    print(f"Total input records: {len(input_df)}")
+    print(f"Complete records: {len(complete_df)}")
+    print(f"Partial records: {len(partial_df)}")
+
+if __name__ == "__main__":
+    test_with_dataframe()
